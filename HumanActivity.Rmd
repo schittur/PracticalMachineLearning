@@ -1,0 +1,99 @@
+---
+title: "Human Activity Prediction Assignment"
+author: "Sriram Chitturi"
+date: "January 27, 2016"
+output: html_document
+---
+
+##Introduction
+
+This project uses the data from 6 participants who had accelerometers on the belt, forearm, arm, and dumbell while exercising. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+Training data - https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Test data - https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+Data set is described in detail at this link - http://groupware.les.inf.puc-rio.br/har
+
+The goal of the project is to predict the manner in which they did the exercise which is the "Classe" variable in the data set.
+
+## Loading and cleaning the data
+
+```{r message=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+```
+
+```{r}
+set.seed(12345); # set seed for reproducibility
+
+# Load data
+pmldata <- read.csv(file="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings = c("NA", ""));
+```
+There are 160 columns. We can eliminate the columns which are not useful.
+After looking at the summary of the dataset using __str(training)__ function I see a lot of NAs in some columns.
+First eliminating these columns from the training set.
+```{r}
+# get the percentage of rows in each column with NAs
+na_count <-sapply(pmldata, function(y) sum(length(which(is.na(y)))));
+na_count <- na_count/nrow(pmldata)*100; # calculate percentage
+columns_na <- names(na_count[ which(na_count > 50)]); # eliminate more than 90% NAs
+
+#eliminating these columns from the data set
+pmldata <- pmldata[, -which(names(pmldata) %in% columns_na)];
+
+```
+
+
+From the remaining columns eliminating some unnecessary columns like timestamps and usernames.
+```{r}
+pmldata <- pmldata[, -which(colnames(pmldata) %in% c("X", "user_name", "raw_timestamp_part_1",
+                      "raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window"))];
+```
+
+Set columns type to double.
+```{r}
+id <- c(1,3:ncol(pmldata)-1);
+pmldata[,id] <- as.double(as.character(unlist(pmldata[,id])));
+str(pmldata);
+```
+
+##Training and predicting
+
+```{r message=FALSE}
+
+# splitting the dataset into 60/40 
+inTrain <- createDataPartition(pmldata$classe, p=0.60, list=F);
+training <- pmldata[inTrain,];
+testing <- pmldata[-inTrain,];
+dim(training);
+dim(testing);
+```
+
+```{r}
+modelFit <- train(classe~., data=training, method="rf", trControl = trainControl(number=2, repeats = 2))
+plot(modelFit);
+```
+
+##Verification of model
+```{r}
+predictions <- predict(modelFit, newdata=testing);
+confusionMatrix(predictions, testing$classe);
+```
+We see that the model predicted with accuracy of 99%.
+
+##Final prediction on testing data for quiz.
+
+```{r}
+finalTesting <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+                         na.strings = c("NA", ""));
+
+id <- c(1,3:ncol(finalTesting)-1);
+finalTesting[,id] <- as.double(as.character(unlist(finalTesting[,id])));
+
+predict(modelFit, newdata=finalTesting);
+
+```
